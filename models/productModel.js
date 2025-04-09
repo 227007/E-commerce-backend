@@ -8,6 +8,7 @@ const productSchema = new mongoose.Schema({
     image: { type: Array, required: true },
     category: { type: String, required: true },
     besstseller: { type: Boolean },
+    companyId: { type: mongoose.Schema.Types.ObjectId, ref: "Company" }, 
     date: { type: Number, required: true }
 
 })
