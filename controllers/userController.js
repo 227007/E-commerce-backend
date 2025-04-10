@@ -35,39 +35,49 @@ const loginUser = async (req, res) => {
 // Route For User Register
 const registerUser = async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { username, email, password } = req.body;
 
-        // Checking User Already Exists 
+        // Check if user already exists
         const exists = await userModel.findOne({ email });
         if (exists) {
-            return res.json({ success: false, message: "User already exists" })
+            return res.status(409).json({ success: false, message: "User already exists" });
         }
 
-        // Validating Email Foemat and Strong Password 
+        // Validate email and password
         if (!validator.isEmail(email)) {
-            return res.json({ success: false, message: "Please enter a valid email" })
-        }
-        if (password.length < 8) {
-            return res.json({ success: false, message: "Please enter a strong password" })
+            return res.status(400).json({ success: false, message: "Please enter a valid email" });
         }
 
-        // Hashing User Password
-        const salt = await bcrypt.genSalt(10)
-        const hashedPassword = await bcrypt.hash(password, salt)
+        if (password.length < 8) {
+            return res.status(400).json({ success: false, message: "Please enter a strong password" });
+        }
+
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
 
         const newUser = new userModel({
-            name,
+            name: username,
             email,
             password: hashedPassword
-        })
+        });
 
-        const user = await newUser.save()
-        const token = createToken(user._id)
-        res.json({ success: true, token })
+        const user = await newUser.save();
+        const token = createToken(user._id);
+
+        res.status(201).json({
+            success: true,
+            token,
+            user: {
+                username: user.name,
+                email: user.email,
+                role: user.role
+            }
+        });
 
     } catch (error) {
-        console.log(error);
-        res.json({ success: false, message: error.message })
+        console.error(error);
+        res.status(500).json({ success: false, message: "Server error" });
     }
 }
 

@@ -83,6 +83,13 @@ const updateCompany = async (req, res) => {
                 message: "Company not found for update"
             });
         }
+        if (company.createdBy.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ success: false, message: "Unauthorized action" });
+        }
+
+        company.name = name;
+        company.description = description;
+        updatedCompany = await company.save();
         res.status(200).json({
             success: true,
             message: "Company updated successfully",
@@ -108,6 +115,11 @@ const deleteCompany = async (req, res) => {
                 message: "Company not found for deletion"
             });
         }
+        if (company.createdBy.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ success: false, message: "Unauthorized action" });
+        }
+
+        await company.deleteOne();
         res.status(200).json({
             success: true,
             message: "Company deleted successfully",

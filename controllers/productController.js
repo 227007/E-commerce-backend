@@ -1,79 +1,136 @@
-import { v2 as cloudinary } from "cloudinary"
-import productModel from "../models/productModel.js"
+import { v2 as cloudinary } from "cloudinary";
+import productModel from "../models/productModel.js";
 
-// Function For Add Product 
+// Function to add a product
 const addProduct = async (req, res) => {
     try {
-        const { name, description, price, category, bestseller } = req.body
-        const image1 = req.files.image1 && req.files.image1[0]
-        const image2 = req.files.image2 && req.files.image2[0]
-        const image3 = req.files.image3 && req.files.image3[0]
-        const image4 = req.files.image4 && req.files.image4[0]
+        const { name, description, price, category, bestseller } = req.body;
+        const image1 = req.files.image1?.[0];
+        const image2 = req.files.image2?.[0];
+        const image3 = req.files.image3?.[0];
+        const image4 = req.files.image4?.[0];
 
-        const images = [image1, image2, image3, image4].filter((item) => item !== undefined)
+        const images = [image1, image2, image3, image4].filter(Boolean);
 
         let imagesUrl = await Promise.all(
             images.map(async (item) => {
                 let result = await cloudinary.uploader.upload(item.path, { resource_type: 'image' });
-                return result.secure_url
+                return result.secure_url;
             })
-        )
+        );
 
         const productData = {
             name,
             description,
             category,
-            price: Number(price),
-            bestseller: bestseller === "true" ? true : false,
+            price: Number(price), 
+            bestseller: bestseller === "true", 
+            image: imagesUrl,
+            companyId: req.user._id, 
             date: Date.now()
-        }
-        console.log(productData)
-        const product = new productModel(productData)
-        await product.save()
+        };
 
-        res.json({ success: true, message: "Product Added" })
+        const product = new productModel(productData);
+        await product.save();
+
+        res.status(201).json({ success: true, message: "Product Added" });
 
     } catch (error) {
-        console.log(error)
-        res.json({ success: false, message: error.message })
+        console.log(error);
+        res.status(500).json({ success: false, message: error.message });
     }
-}
+};
 
-// Function For List Product 
+// Function to list all products
 const listProduct = async (req, res) => {
     try {
         const products = await productModel.find({});
         res.json({ success: true, products })
 
     } catch (error) {
-        console.log(error)
-        res.json({ success: false, message: error.message })
+        console.log(error);
+        res.json({ success: false, message: error.message });
     }
 }
 
-// Function For Remove Product 
+// Function to remove a product
 const removeProduct = async (req, res) => {
     try {
-        await productModel.findByIdAndDelete(req.body.id)
-        res.json({ success: true, message: "Product Removed" })
+        await productModel.findByIdAndDelete(req.body.id);
+        res.json({ success: true, message: "Product Removed" });
 
     } catch (error) {
-        console.log(error)
-        res.json({ success: false, message: error.message })
+        console.log(error);
+        res.json({ success: false, message: error.message });
     }
 }
 
-// Function For Single Product Information
+// Function to get a single product's details
 const SingleProduct = async (req, res) => {
     try {
-        const { productId } = req.body
-        const product = await productModel.findById(productId)
-        res.json({ success: true, product })
+        const { productId } = req.body;
+        const product = await productModel.findById(productId);
+        res.json({ success: true, product });
 
     } catch (error) {
-        console.log(error)
-        res.json({ success: false, message: error.message })
+        console.log(error);
+        res.json({ success: false, message: error.message });
     }
 }
 
-export { listProduct, addProduct, removeProduct, SingleProduct }
+// Function to update a product
+const updateProduct = async (req, res) => {
+    try {
+        const { productId, name, description, price, category, bestseller } = req.body;
+        const product = await productModel.findById(productId);
+
+        if (!product) {
+            return res.status(404).json({ success: false, message: "Product not found" });
+        }
+
+        // Update the product details
+        product.name = name || product.name;
+        product.description = description || product.description;
+        product.price = price ? Number(price) : product.price;
+        product.category = category || product.category;
+        product.bestseller = bestseller !== undefined ? bestseller === "true" : product.bestseller;
+
+        const images = req.files ? [req.files.image1, req.files.image2, req.files.image3, req.files.image4].filter(Boolean) : [];
+        if (images.length > 0) {
+            let imagesUrl = await Promise.all(
+                images.map(async (item) => {
+                    let result = await cloudinary.uploader.upload(item[0].path, { resource_type: 'image' });
+                    return result.secure_url;
+                })
+            );
+            product.image = imagesUrl;
+        }
+        await product.save();
+
+        res.json({ success: true, message: "Product updated successfully" });
+
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// Function to get products by company
+const productsByCompany = async (req, res) => {
+    try {
+        const { companyId } = req.params; 
+        const products = await productModel.find({ companyId });
+
+        if (products.length === 0) {
+            return res.status(404).json({ success: false, message: "No products found for this company" });
+        }
+
+        res.json({ success: true, products });
+
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+export { listProduct, addProduct, removeProduct, SingleProduct, updateProduct, productsByCompany };
