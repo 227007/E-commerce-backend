@@ -9,17 +9,17 @@ const createCompany = async (req, res) => {
             description,
             createdBy: req.user._id
         });
-        res.status(201).json({ 
-            success: true, 
+        res.status(201).json({
+            success: true,
             message: "Company created successfully",
-            data: company 
+            data: company
         });
     } catch (error) {
         console.error("Error creating company:", error);
-        res.status(500).json({ 
-            success: false, 
+        res.status(500).json({
+            success: false,
             message: "Failed to create company",
-            error: error.message 
+            error: error.message
         });
     }
 };
@@ -135,4 +135,4 @@ const deleteCompany = async (req, res) => {
     }
 };
 
-export { createCompany,getAllCompanies,getCompanyById,updateCompany,deleteCompany };
+export { createCompany, getAllCompanies, getCompanyById, updateCompany, deleteCompany };

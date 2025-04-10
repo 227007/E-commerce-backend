@@ -10,8 +10,8 @@ const placeOrder = async (req, res) => {
             items,
             address,
             amount,
-            paymentMethod: "COD", 
-            payment: false, 
+            paymentMethod: "COD",
+            payment: false,
             date: Date.now()
         };
         const newOrder = new orderModel(orderData);

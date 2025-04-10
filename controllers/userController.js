@@ -48,9 +48,18 @@ const registerUser = async (req, res) => {
             return res.status(400).json({ success: false, message: "Please enter a valid email" });
         }
 
-        if (password.length < 8) {
-            return res.status(400).json({ success: false, message: "Please enter a strong password" });
-        }
+        if (!validator.isStrongPassword(password, { 
+            minLength: 8, 
+            minLowercase: 1, 
+            minUppercase: 1, 
+            minNumbers: 1, 
+            minSymbols: 1 
+        })) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Password must contain at least 8 characters, including uppercase, lowercase, number, and symbol" 
+            });
+        }        
 
         // Hash password
         const salt = await bcrypt.genSalt(10);

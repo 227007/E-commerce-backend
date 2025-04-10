@@ -23,10 +23,10 @@ const addProduct = async (req, res) => {
             name,
             description,
             category,
-            price: Number(price), 
-            bestseller: bestseller === "true", 
+            price: Number(price),
+            bestseller: bestseller === "true",
             image: imagesUrl,
-            companyId: req.user._id, 
+            companyId: req.user._id,
             date: Date.now()
         };
 
@@ -44,12 +44,25 @@ const addProduct = async (req, res) => {
 // Function to list all products
 const listProduct = async (req, res) => {
     try {
-        const products = await productModel.find({});
-        res.json({ success: true, products })
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
 
+        const products = await productModel.find({}).skip(skip).limit(limit);
+        const total = await productModel.countDocuments();
+
+        res.json({
+            success: true,
+            products,
+            pagination: {
+                page,
+                limit,
+                total,
+                pages: Math.ceil(total / limit)
+            }
+        });
     } catch (error) {
-        console.log(error);
-        res.json({ success: false, message: error.message });
+        next(error);
     }
 }
 
@@ -118,7 +131,7 @@ const updateProduct = async (req, res) => {
 // Function to get products by company
 const productsByCompany = async (req, res) => {
     try {
-        const { companyId } = req.params; 
+        const { companyId } = req.params;
         const products = await productModel.find({ companyId });
 
         if (products.length === 0) {

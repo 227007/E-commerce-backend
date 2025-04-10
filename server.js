@@ -33,7 +33,7 @@ const swaggerOptions = {
         description: 'Local server',
       },
       {
-        url: `https://your-production-url.com`, // Replace with your production URL
+        url: `https://your-production-url.com`, 
         description: 'Production server',
       },
     ],
@@ -50,7 +50,7 @@ const swaggerOptions = {
       bearerAuth: []
     }]
   },
-  apis: ['./routes/*.js'], // Path to your route files
+  apis: ['./routes/*.js'], 
 };
 
 const swaggerSpec = swaggerJsdoc(swaggerOptions);
@@ -88,8 +88,6 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/', (req, res) => {
     res.send("API Working")
 })
-
-const PORT = 4000;
 
 app.listen(port, () => {
   console.log('Server Started on PORT : ' + port)
