@@ -11,6 +11,8 @@ import companyRouter from './routes/companyRoute.js'
 import reviewRouter from './routes/reviewRoute.js'
 import swaggerJsdoc from 'swagger-jsdoc'
 import swaggerUi from 'swagger-ui-express'
+import passport from 'passport';
+import './config/passport.js';
 
 // App Config
 const app = express()
@@ -58,6 +60,7 @@ const swaggerSpec = swaggerJsdoc(swaggerOptions);
 // Middleware
 app.use(express.json())
 app.use(cors())
+app.use(passport.initialize());
 
 // API Endpoints
 app.use('/api/user', userRouter)
