@@ -2,15 +2,12 @@ import validator from "validator";
 import bcrypt from "bcrypt";
 import jwt from 'jsonwebtoken';
 import userModel from "../models/userModel.js";
-import passport from 'passport';
-import { OAuth2Strategy as GoogleStrategy } from 'passport-google-oauth';
-import { Strategy as FacebookStrategy } from 'passport-facebook';
 
 const createToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 }
 
-// Route For User Login
+// User Login
 const loginUser = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -18,7 +15,7 @@ const loginUser = async (req, res) => {
         if (!email || !password) {
             return res.status(400).json({
                 success: false,
-                message: "Email and password are required"
+                message: "Please provide both email and password"
             });
         }
 
@@ -31,10 +28,10 @@ const loginUser = async (req, res) => {
             });
         }
 
-        if (user.isOAuth) {
+        if (user.provider !== 'local') {
             return res.status(400).json({
                 success: false,
-                message: "This account was registered via social media. Please use the appropriate login method."
+                message: `Please login using your ${user.provider} account`
             });
         }
 
@@ -42,12 +39,12 @@ const loginUser = async (req, res) => {
         if (!isMatch) {
             return res.status(401).json({
                 success: false,
-                message: 'Invalid credentials'
+                message: "Invalid credentials"
             });
         }
 
         const token = createToken(user._id);
-        res.json({
+        res.status(200).json({
             success: true,
             token,
             user: {
@@ -67,7 +64,7 @@ const loginUser = async (req, res) => {
     }
 }
 
-// Route For User Register
+// User Registration
 const registerUser = async (req, res) => {
     try {
         const { username, email, password } = req.body;
@@ -90,7 +87,7 @@ const registerUser = async (req, res) => {
         if (!validator.isEmail(email)) {
             return res.status(400).json({
                 success: false,
-                message: "Please enter a valid email"
+                message: "Invalid email format"
             });
         }
 
@@ -107,13 +104,15 @@ const registerUser = async (req, res) => {
             });
         }
 
+        // Hash password
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
         const newUser = new userModel({
             username,
             email,
-            password: hashedPassword
+            password: hashedPassword,
+            provider: 'local'
         });
 
         const user = await newUser.save();
@@ -139,47 +138,51 @@ const registerUser = async (req, res) => {
     }
 }
 
-// Route For Admin Login 
-const adminLogin = async (req, res) => {
+// Social Login (Facebook/Google)
+const socialLogin = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { email, name, provider, providerId } = req.body;
 
-        if (!email || !password) {
+        if (!email || !provider) {
             return res.status(400).json({
                 success: false,
-                message: "Email and password are required"
+                message: "Email and provider are required"
             });
         }
 
-        const admin = await userModel.findOne({
-            email,
-            role: 'admin'
+        let user = await userModel.findOne({
+            $or: [
+                { email },
+                { providerId }
+            ]
         });
 
-        if (!admin) {
-            return res.status(404).json({
+        if (!user) {
+            user = new userModel({
+                username: name || email.split('@')[0],
+                email,
+                provider,
+                providerId
+            });
+
+            await user.save();
+        } else if (user.provider !== provider) {
+            return res.status(400).json({
                 success: false,
-                message: 'Admin not found'
+                message: `This email is already registered with ${user.provider}`
             });
         }
 
-        const isMatch = await bcrypt.compare(password, admin.password);
-        if (!isMatch) {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid credentials'
-            });
-        }
-
-        const token = createToken(admin._id);
-        res.json({
+        const token = createToken(user._id);
+        res.status(200).json({
             success: true,
             token,
             user: {
-                id: admin._id,
-                username: admin.username,
-                email: admin.email,
-                role: admin.role
+                id: user._id,
+                username: user.username,
+                email: user.email,
+                role: user.role,
+                provider: user.provider
             }
         });
 
@@ -192,99 +195,42 @@ const adminLogin = async (req, res) => {
     }
 }
 
-// Google OAuth Configuration
-passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "/auth/google/callback"
-},
-    async (accessToken, refreshToken, profile, done) => {
-        try {
-            let user = await userModel.findOne({ email: profile.emails[0].value });
+const adminLogin = async (req, res) => {
+    try {
+        const { email, password } = req.body;
 
-            if (!user) {
-                user = new userModel({
-                    username: profile.displayName,
-                    email: profile.emails[0].value,
-                    password: '',
-                    isOAuth: true,
-                    googleId: profile.id
-                });
-                await user.save();
-            }
-
-            return done(null, user);
-        } catch (error) {
-            return done(error, null);
-        }
-    }));
-
-// Facebook OAuth Configuration
-passport.use(new FacebookStrategy({
-    clientID: process.env.FACEBOOK_APP_ID,
-    clientSecret: process.env.FACEBOOK_APP_SECRET,
-    callbackURL: "/auth/facebook/callback",
-    profileFields: ['id', 'displayName', 'emails']
-},
-    async (accessToken, refreshToken, profile, done) => {
-        try {
-            if (!profile.emails || !profile.emails[0]) {
-                return done(new Error("No email associated with Facebook account"), null);
-            }
-
-            let user = await userModel.findOne({ email: profile.emails[0].value });
-
-            if (!user) {
-                user = new userModel({
-                    username: profile.displayName,
-                    email: profile.emails[0].value,
-                    password: '',
-                    isOAuth: true,
-                    facebookId: profile.id
-                });
-                await user.save();
-            }
-
-            return done(null, user);
-        } catch (error) {
-            return done(error, null);
-        }
-    }));
-
-// Google OAuth Login
-const googleLogin = passport.authenticate('google', {
-    scope: ['profile', 'email']
-});
-
-// Google OAuth Callback
-const googleCallback = (req, res, next) => {
-    passport.authenticate('google', (err, user) => {
-        if (err || !user) {
-            return res.redirect('/login?error=auth_failed');
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Please provide both email and password"
+            });
         }
 
-        const token = createToken(user._id);
-        res.redirect(`/?token=${token}`);
-    })(req, res, next);
-};
-
-// Facebook OAuth Login
-const facebookLogin = passport.authenticate('facebook', {
-    scope: ['email']
-});
-
-// Facebook OAuth Callback
-const facebookCallback = (req, res, next) => {
-    passport.authenticate('facebook', (err, user) => {
-        if (err || !user) {
-            return res.redirect('/login?error=auth_failed');
+        if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
+            const token = jwt.sign({ email, role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '7d' });
+            res.json({
+                success: true,
+                token,
+                user: {
+                    email,
+                    role: 'admin'
+                }
+            });
+        }
+        else {
+            res.status(401).json({
+                success: false,
+                message: 'Invalid credentials'
+            });
         }
 
-        const token = createToken(user._id);
-        res.redirect(`/?token=${token}`);
-    })(req, res, next);
-};
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
+    }
+}
 
-export {
-    loginUser, registerUser, adminLogin, googleLogin, googleCallback, facebookLogin, facebookCallback
-};
+export { loginUser, registerUser, adminLogin, socialLogin };

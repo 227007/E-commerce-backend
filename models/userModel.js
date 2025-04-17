@@ -4,7 +4,9 @@ const userSchema = new mongoose.Schema({
     username: {
         type: String,
         required: true,
-        trim: true
+        trim: true,
+        minlength: 3,
+        maxlength: 30
     },
     email: {
         type: String,
@@ -13,16 +15,23 @@ const userSchema = new mongoose.Schema({
         trim: true,
         lowercase: true,
         validate: {
-            validator: (value) => {
-                return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+            validator: function (v) {
+                return /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/.test(v);
             },
-            message: "Please enter a valid email"
+            message: props => `${props.value} is not a valid email!`
         }
     },
     password: {
         type: String,
         required: function () {
-            return !this.isOAuth;
+            return this.provider === 'local';
+        },
+        validate: {
+            validator: function (v) {
+                if (this.provider !== 'local') return true;
+                return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(v);
+            },
+            message: props => `Password must contain 8+ chars with uppercase, lowercase, number & symbol`
         }
     },
     cartData: {
@@ -38,24 +47,20 @@ const userSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "Company"
     },
-    isOAuth: {
-        type: Boolean,
-        default: false
+    provider: {
+        type: String,
+        enum: ["facebook", "google", "local"],
+        default: "local",
+        required: true
     },
-    googleId: String,
-    facebookId: String,
-    createdAt: {
-        type: Date,
-        default: Date.now
+    providerId: {
+        type: String,
+        unique: true,
+        sparse: true
     }
 }, {
     minimize: false,
-    toJSON: {
-        transform: function (doc, ret) {
-            delete ret.password;
-            delete ret.__v;
-        }
-    }
+    timestamps: true
 });
 
 const userModel = mongoose.models.user || mongoose.model("user", userSchema);

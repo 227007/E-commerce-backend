@@ -1,15 +1,11 @@
 import express from 'express';
-import { loginUser, registerUser, adminLogin, googleLogin, googleCallback, facebookLogin, facebookCallback } from '../controllers/userController.js';
-import passport from 'passport';
+import { loginUser, registerUser, adminLogin, socialLogin } from '../controllers/userController.js';
 
 const userRouter = express.Router();
 
 userRouter.post('/register', registerUser);
 userRouter.post('/login', loginUser);
+userRouter.post('/auth/social', socialLogin);
 userRouter.post('/admin/login', adminLogin);
-userRouter.get('/auth/google', googleLogin);
-userRouter.get('/auth/google/callback', googleCallback);
-userRouter.get('/auth/facebook', facebookLogin);
-userRouter.get('/auth/facebook/callback', facebookCallback);
 
 export default userRouter;
