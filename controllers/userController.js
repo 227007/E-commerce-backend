@@ -51,7 +51,9 @@ const loginUser = async (req, res) => {
                 id: user._id,
                 username: user.username,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                provider: user.provider,
+                companyId: user.companyId
             }
         });
 
@@ -125,7 +127,9 @@ const registerUser = async (req, res) => {
                 id: user._id,
                 username: user.username,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                provider: user.provider,
+                companyId: user.companyId
             }
         });
 
@@ -182,7 +186,8 @@ const socialLogin = async (req, res) => {
                 username: user.username,
                 email: user.email,
                 role: user.role,
-                provider: user.provider
+                provider: user.provider,
+                companyId: user.companyId
             }
         });
 
@@ -233,4 +238,94 @@ const adminLogin = async (req, res) => {
     }
 }
 
-export { loginUser, registerUser, adminLogin, socialLogin };
+const getCurrentUser = async (req, res) => {
+    try {
+        const user = await userModel.findById(req.userId).select('-password -__v');
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            user: {
+                id: user._id,
+                username: user.username,
+                email: user.email,
+                role: user.role,
+                provider: user.provider,
+                companyId: user.companyId,
+                cartData: user.cartData,
+                createdAt: user.createdAt
+            }
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
+    }
+}
+
+const createCompanyOwner = async (req, res) => {
+    try {
+        const { username, email, password, companyId } = req.body;
+
+        if (!username || !email || !password || !companyId) {
+            return res.status(400).json({
+                success: false,
+                message: "All fields are required"
+            });
+        }
+
+        const exists = await userModel.findOne({ email });
+        if (exists) {
+            return res.status(409).json({
+                success: false,
+                message: "Email already in use"
+            });
+        }
+
+        // Hash password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        const newUser = new userModel({
+            username,
+            email,
+            password: hashedPassword,
+            provider: 'local',
+            role: 'company',
+            companyId
+        });
+
+        const user = await newUser.save();
+        const token = createToken(user._id);
+
+        res.status(201).json({
+            success: true,
+            token,
+            user: {
+                id: user._id,
+                username: user.username,
+                email: user.email,
+                role: user.role,
+                companyId: user.companyId
+            }
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
+    }
+}
+
+export { loginUser, registerUser, adminLogin, socialLogin, getCurrentUser, createCompanyOwner };

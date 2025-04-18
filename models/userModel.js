@@ -34,6 +34,16 @@ const userSchema = new mongoose.Schema({
             message: props => `Password must contain 8+ chars with uppercase, lowercase, number & symbol`
         }
     },
+    phone: {
+        type: String,
+        trim: true,
+        validate: {
+            validator: function(v) {
+                return !v || /^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,3}[-\s.]?[0-9]{3,6}$/.test(v);
+            },
+            message: props => `${props.value} is not a valid phone number!`
+        }
+    },
     cartData: {
         type: Object,
         default: {}
