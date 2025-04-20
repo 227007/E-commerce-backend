@@ -19,7 +19,7 @@ const companyAuth = async (req, res, next) => {
             return res.status(404).json({ success: false, message: "User not found" });
         }
 
-        if (user.role !== "company") {
+        if (user.userType !== "company") {
             return res.status(403).json({
                 success: false,
                 message: "Company access required"
