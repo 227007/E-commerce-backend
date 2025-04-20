@@ -51,7 +51,7 @@ const loginUser = async (req, res) => {
                 id: user._id,
                 username: user.username,
                 email: user.email,
-                role: user.role,
+                userType: user.userType,
                 provider: user.provider,
                 companyId: user.companyId
             }
@@ -127,7 +127,7 @@ const registerUser = async (req, res) => {
                 id: user._id,
                 username: user.username,
                 email: user.email,
-                role: user.role,
+                userType: user.userType,
                 provider: user.provider,
                 companyId: user.companyId
             }
@@ -185,7 +185,7 @@ const socialLogin = async (req, res) => {
                 id: user._id,
                 username: user.username,
                 email: user.email,
-                role: user.role,
+                userType: user.userType,
                 provider: user.provider,
                 companyId: user.companyId
             }
@@ -218,7 +218,7 @@ const adminLogin = async (req, res) => {
                 token,
                 user: {
                     email,
-                    role: 'admin'
+                    userType: 'admin'
                 }
             });
         }
@@ -255,7 +255,7 @@ const getCurrentUser = async (req, res) => {
                 id: user._id,
                 username: user.username,
                 email: user.email,
-                role: user.role,
+                userType: user.userType,
                 provider: user.provider,
                 companyId: user.companyId,
                 cartData: user.cartData,
@@ -300,7 +300,7 @@ const createCompanyOwner = async (req, res) => {
             email,
             password: hashedPassword,
             provider: 'local',
-            role: 'company',
+            userType: 'company',
             companyId
         });
 
@@ -314,7 +314,7 @@ const createCompanyOwner = async (req, res) => {
                 id: user._id,
                 username: user.username,
                 email: user.email,
-                role: user.role,
+                userType: user.userType,
                 companyId: user.companyId
             }
         });
