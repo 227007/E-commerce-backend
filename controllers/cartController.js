@@ -38,14 +38,14 @@ const addToCart = async (req, res) => {
         await cart.save();
         res.json({
             success: true,
-            message: "تمت إضافة المنتج إلى السلة بنجاح"
+            message: "The product has been added to the cart successfully"
         });
 
     } catch (error) {
-        console.error("خطأ في إضافة المنتج إلى السلة:", error);
+        console.error("Error adding product to cart:", error);
         res.status(500).json({
             success: false,
-            message: "حدث خطأ أثناء إضافة المنتج إلى السلة"
+            message: "An error occurred while adding the product to the cart"
         });
     }
 }
