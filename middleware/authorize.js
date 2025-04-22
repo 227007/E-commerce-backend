@@ -1,10 +1,12 @@
-const authorize = (roles) => {
+const authorize = (roles = []) => {
+    if (typeof roles === 'string') {
+        roles = [roles];
+    }
+
     return (req, res, next) => {
-        if (!roles.includes(req.user.role)) {
-            return res.status(403).json({ 
-                success: false,
-                error: 'Forbidden' 
-            });
+        if (roles.length && !roles.includes(req.user.userType)) {
+            res.status(403);
+            throw new Error(`User role ${req.user.userType} is not authorized to access this route`);
         }
         next();
     };

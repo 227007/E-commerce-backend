@@ -1,95 +1,47 @@
-import express from 'express'
-import cors from 'cors'
-import 'dotenv/config'
-import connectDB from './config/mongodb.js'
-import connectCloudinary from './config/cloudinary.js'
-import userRouter from './routes/userRoute.js'
-import productRouter from './routes/productRoute.js'
-import cartRouter from './routes/cartRoute.js'
-import orderRouter from './routes/orderRoute.js'
-import companyRouter from './routes/companyRoute.js'
-import reviewRouter from './routes/reviewRoute.js'
-import swaggerJsdoc from 'swagger-jsdoc'
-import swaggerUi from 'swagger-ui-express'
+import express from 'express';
+import dotenv from 'dotenv';
+import cors from 'cors';
+import connectDB from './config/db.js';
+import errorHandler from './middleware/errorHandler.js';
 
-// App Config
-const app = express()
-const port = process.env.PORT || 4000
-connectDB()
-connectCloudinary()
+dotenv.config();
 
-// Swagger configuration
-const swaggerOptions = {
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'E-Commerce API Documentation',
-      version: '1.0.0',
-      description: 'API documentation for your e-commerce application',
-    },
-    servers: [
-      {
-        url: `http://localhost:${port}`,
-        description: 'Local server',
-      },
-      {
-        url: `https://your-production-url.com`, 
-        description: 'Production server',
-      },
-    ],
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
-        }
-      }
-    },
-    security: [{
-      bearerAuth: []
-    }]
-  },
-  apis: ['./routes/*.js'], 
-};
+connectDB();
 
-const swaggerSpec = swaggerJsdoc(swaggerOptions);
+const app = express();
 
 // Middleware
-app.use(express.json())
-app.use(cors())
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// API Endpoints
-app.use('/api/user', userRouter)
-app.use('/api/product', productRouter)
-app.use('/api/cart', cartRouter)
-app.use('/api/order', orderRouter)
-app.use("/api/companies", companyRouter);
-app.use("/api/reviews", reviewRouter);
+// Routes
+import authRoutes from './routes/authRoutes.js';
+import userRoutes from './routes/userRoutes.js';
+import productRoutes from './routes/productRoutes.js';
+import orderRoutes from './routes/orderRoutes.js';
+import companyRoutes from './routes/companyRoutes.js';
+import reviewRoutes from './routes/reviewRoutes.js';
+import reportRoutes from './routes/reportRoutes.js';
+import cartRoutes from './routes/cartRoutes.js';
 
-// Swagger UI route
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-/**
- * @swagger
- * /:
- *   get:
- *     summary: 
- *     responses:
- *       200:
- *         description: 
- *         content:
- *           text/plain:
- *             schema:
- *               type: string
- *               example: 
- */
-  
-app.get('/', (req, res) => {
-    res.send("API Working")
-})
+app.use('/api/users', userRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/cart', cartRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/companies', companyRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/reports', reportRoutes);
 
-app.listen(port, () => {
-  console.log('Server Started on PORT : ' + port)
-  console.log(`Swagger docs available at http://localhost:${port}/api-docs`)
-})
+// Error handling middleware
+app.use(errorHandler);
+
+// Start server
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});

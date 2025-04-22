@@ -1,127 +1,132 @@
-import Cart from "../models/cartModel.js";
+import asyncHandler from 'express-async-handler';
+import Product from '../models/Product.js';
 
-const MAX_QUANTITY = 10;
-
-// Add Products To User Cart
-const addToCart = async (req, res) => {
-    try {
-        const { userId, itemId, quantity = 1 } = req.body;
-
-        if (quantity <= 0) {
-            return res.status(400).json({
-                success: false,
-                message: "The quantity must be a positive number"
-            });
-        }
-
-        let cart = await Cart.findOne({ userId });
-
-        if (!cart) {
-            cart = new Cart({
-                userId,
-                items: { [itemId]: quantity }
-            });
-        } else {
-
-            const newQuantity = (cart.items[itemId] || 0) + quantity;
-
-            if (newQuantity > MAX_QUANTITY) {
-                return res.status(400).json({
-                    success: false,
-                    message: `${MAX_QUANTITY} `
-                });
-            }
-
-            cart.items[itemId] = newQuantity;
-        }
-
-        await cart.save();
-        res.json({
-            success: true,
-            message: "The product has been added to the cart successfully"
-        });
-
-    } catch (error) {
-        console.error("Error adding product to cart:", error);
-        res.status(500).json({
-            success: false,
-            message: "An error occurred while adding the product to the cart"
-        });
+// Get user cart
+const getCart = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id).select('cartData');
+    if (!user.cartData || Object.keys(user.cartData).length === 0) {
+        return res.json({ items: [], total: 0 });
     }
-}
 
-// Update User Cart
-const updateCart = async (req, res) => {
-    try {
-        const { userId, itemId, quantity } = req.body;
+    const cartItems = await Promise.all(
+        Object.entries(user.cartData).map(async ([productId, quantity]) => {
+            const product = await Product.findById(productId)
+                .select('name price images companyId stock');
 
-        if (quantity <= 0) {
-            return res.status(400).json({
-                success: false,
-                message: " The quantity must be a positive number"
-            });
-        }
+            if (!product) return null;
 
-        if (quantity > MAX_QUANTITY) {
-            return res.status(400).json({
-                success: false,
-                message: `${MAX_QUANTITY} `
-            });
-        }
+            return {
+                product: product._id,
+                name: product.name,
+                price: product.price,
+                image: product.images[0],
+                quantity,
+                stock: product.stock,
+                company: product.companyId
+            };
+        })
+    );
 
-        const cart = await Cart.findOne({ userId });
+    const validItems = cartItems.filter(item => item !== null);
+    const total = validItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-        if (!cart || !cart.items[itemId]) {
-            return res.status(404).json({
-                success: false,
-                message: "The product is not in the cart"
-            });
-        }
+    res.json({
+        items: validItems,
+        total: parseFloat(total.toFixed(2))
+    });
+});
 
-        cart.items[itemId] = quantity;
-        await cart.save();
+// Add item to cart
 
-        res.json({
-            success: true,
-            message: "The cart was updated successfully"
-        });
+const addToCart = asyncHandler(async (req, res) => {
+    const { productId, quantity = 1 } = req.body;
 
-    } catch (error) {
-        console.error("Error updating cart:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error updating cart"
-        });
+    const product = await Product.findById(productId);
+    if (!product) {
+        res.status(404);
+        throw new Error('Product not found');
     }
-}
 
-// Get User Cart Data
-const getUserCart = async (req, res) => {
-    try {
-        const { userId } = req.body;
-        const cart = await Cart.findOne({ userId });
-
-        if (!cart) {
-            return res.json({
-                success: true,
-                cartData: {},
-                message: "The basket is empty"
-            });
-        }
-
-        res.json({
-            success: true,
-            cartData: cart.items,
-            message: "Basket data fetched successfully"
-        });
-
-    } catch (error) {
-        console.error("Error fetching basket data:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error fetching basket data:"
-        });
+    if (product.stock < quantity) {
+        res.status(400);
+        throw new Error('Not enough stock available');
     }
-}
 
-export { addToCart, updateCart, getUserCart };
+    const user = await User.findById(req.user._id);
+    user.cartData = user.cartData || {};
+
+    const currentQty = user.cartData[productId] || 0;
+    user.cartData[productId] = currentQty + quantity;
+
+    await user.save();
+
+    res.json({ message: 'Product added to cart', cart: user.cartData });
+});
+
+// Update cart item quantity
+
+const updateCartItem = asyncHandler(async (req, res) => {
+    const { quantity } = req.body;
+    const { productId } = req.params;
+
+    if (quantity <= 0) {
+        res.status(400);
+        throw new Error('Quantity must be greater than zero');
+    }
+
+    const product = await Product.findById(productId);
+    if (!product) {
+        res.status(404);
+        throw new Error('Product not found');
+    }
+
+    if (product.stock < quantity) {
+        res.status(400);
+        throw new Error('Not enough stock available');
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user.cartData || !user.cartData[productId]) {
+        res.status(404);
+        throw new Error('Product not found in cart');
+    }
+
+    user.cartData[productId] = quantity;
+    await user.save();
+
+    res.json({ message: 'Cart updated', cart: user.cartData });
+});
+
+// Remove item from cart
+
+const removeFromCart = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id);
+
+    if (!user.cartData || !user.cartData[req.params.productId]) {
+        res.status(404);
+        throw new Error('Product not found in cart');
+    }
+
+    delete user.cartData[req.params.productId];
+    await user.save();
+
+    res.json({ message: 'Product removed from cart', cart: user.cartData });
+});
+
+// Clear cart
+
+const clearCart = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id);
+    user.cartData = {};
+    await user.save();
+
+    res.json({ message: 'Cart cleared' });
+});
+
+export {
+    getCart,
+    addToCart,
+    updateCartItem,
+    removeFromCart,
+    clearCart
+};

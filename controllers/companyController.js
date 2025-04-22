@@ -1,138 +1,187 @@
-import Company from '../models/companyModel.js';
+import asyncHandler from 'express-async-handler';
+import Company from '../models/Company.js';
+import User from '../models/User.js';
 
 // Create a new company
-const createCompany = async (req, res) => {
-    try {
-        const { name, description } = req.body;
-        const company = await Company.create({
-            name,
-            description,
-            createdBy: req.user._id
-        });
-        res.status(201).json({
-            success: true,
-            message: "Company created successfully",
-            data: company
-        });
-    } catch (error) {
-        console.error("Error creating company:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to create company",
-            error: error.message
+const createCompany = asyncHandler(async (req, res) => {
+    const { name, description, adminEmail } = req.body;
+
+    const companyExists = await Company.findOne({ name });
+    if (companyExists) {
+        res.status(400);
+        throw new Error('Company already exists');
+    }
+
+    const company = await Company.create({
+        name,
+        description,
+        createdBy: req.user._id
+    });
+
+    if (adminEmail) {
+        const tempPassword = Math.random().toString(36).slice(-8);
+        
+        const user = await User.create({
+            username: name + ' Admin',
+            email: adminEmail,
+            password: tempPassword,
+            userType: 'company',
+            companyId: company._id
         });
     }
-};
+
+    res.status(201).json(company);
+});
 
 // Get all companies
-const getAllCompanies = async (req, res) => {
-    try {
-        const companies = await Company.find().populate('createdBy', 'name email');
-        res.status(200).json({
-            success: true,
-            message: "Companies retrieved successfully",
-            data: companies
-        });
-    } catch (error) {
-        console.error("Error fetching companies:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch companies",
-            error: error.message
-        });
+const getCompanies = asyncHandler(async (req, res) => {
+    const { page = 1, limit = 10, search } = req.query;
+    
+    const query = {};
+    if (search) {
+        query.name = { $regex: search, $options: 'i' };
     }
-};
 
-// Get single company by ID
-const getCompanyById = async (req, res) => {
-    try {
-        const company = await Company.findById(req.params.id).populate('createdBy', 'name email');
-        if (!company) {
-            return res.status(404).json({
-                success: false,
-                message: "Company not found"
-            });
-        }
-        res.status(200).json({
-            success: true,
-            message: "Company retrieved successfully",
-            data: company
-        });
-    } catch (error) {
-        console.error("Error fetching company:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch company",
-            error: error.message
-        });
+    const companies = await Company.find(query)
+        .limit(limit * 1)
+        .skip((page - 1) * limit)
+        .populate('createdBy', 'username email')
+        .exec();
+
+    const count = await Company.countDocuments(query);
+
+    res.json({
+        companies,
+        totalPages: Math.ceil(count / limit),
+        currentPage: page,
+        totalCompanies: count
+    });
+});
+
+// Get company by ID
+const getCompanyById = asyncHandler(async (req, res) => {
+    const company = await Company.findById(req.params.id)
+        .populate('createdBy', 'username email');
+
+    if (!company) {
+        res.status(404);
+        throw new Error('Company not found');
     }
-};
+
+    if (req.user.userType !== 'admin' && req.user.companyId.toString() !== company._id.toString()) {
+        res.status(403);
+        throw new Error('Not authorized to view this company');
+    }
+
+    const productsCount = await Product.countDocuments({ companyId: company._id });
+    const ordersCount = await Order.countDocuments({ company: company._id });
+    const totalSales = await Order.aggregate([
+        { $match: { company: company._id, isPaid: true } },
+        { $group: { _id: null, total: { $sum: '$totalPrice' } } }
+    ]);
+
+    res.json({
+        ...company._doc,
+        stats: {
+            productsCount,
+            ordersCount,
+            totalSales: totalSales[0]?.total || 0
+        }
+    });
+});
 
 // Update company
-const updateCompany = async (req, res) => {
-    try {
-        const { name, description } = req.body;
-        const updatedCompany = await Company.findByIdAndUpdate(
-            req.params.id,
-            { name, description },
-            { new: true, runValidators: true }
-        );
-        if (!updatedCompany) {
-            return res.status(404).json({
-                success: false,
-                message: "Company not found for update"
-            });
-        }
-        if (company.createdBy.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, message: "Unauthorized action" });
-        }
+const updateCompany = asyncHandler(async (req, res) => {
+    const { name, description } = req.body;
 
-        company.name = name;
-        company.description = description;
-        updatedCompany = await company.save();
-        res.status(200).json({
-            success: true,
-            message: "Company updated successfully",
-            data: updatedCompany
-        });
-    } catch (error) {
-        console.error("Error updating company:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to update company",
-            error: error.message
-        });
+    const company = await Company.findById(req.params.id);
+
+    if (!company) {
+        res.status(404);
+        throw new Error('Company not found');
     }
-};
+
+    if (req.user.userType !== 'admin' && req.user.companyId.toString() !== company._id.toString()) {
+        res.status(403);
+        throw new Error('Not authorized to update this company');
+    }
+
+    company.name = name || company.name;
+    company.description = description || company.description;
+
+    const updatedCompany = await company.save();
+    res.json(updatedCompany);
+});
 
 // Delete company
-const deleteCompany = async (req, res) => {
-    try {
-        const deletedCompany = await Company.findByIdAndDelete(req.params.id);
-        if (!deletedCompany) {
-            return res.status(404).json({
-                success: false,
-                message: "Company not found for deletion"
-            });
-        }
-        if (company.createdBy.toString() !== req.user._id.toString()) {
-            return res.status(403).json({ success: false, message: "Unauthorized action" });
-        }
+const deleteCompany = asyncHandler(async (req, res) => {
+    const company = await Company.findById(req.params.id);
 
-        await company.deleteOne();
-        res.status(200).json({
-            success: true,
-            message: "Company deleted successfully",
-            data: deletedCompany
-        });
-    } catch (error) {
-        console.error("Error deleting company:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to delete company",
-            error: error.message
-        });
+    if (!company) {
+        res.status(404);
+        throw new Error('Company not found');
     }
-};
 
-export { createCompany, getAllCompanies, getCompanyById, updateCompany, deleteCompany };
+    const productsCount = await Product.countDocuments({ companyId: company._id });
+    if (productsCount > 0) {
+        res.status(400);
+        throw new Error('Cannot delete company with existing products');
+    }
+
+    await company.remove();
+    res.json({ message: 'Company removed' });
+});
+
+// Get company owners
+const getCompanyOwners = asyncHandler(async (req, res) => {
+    const company = await Company.findById(req.params.id);
+    if (!company) {
+        res.status(404);
+        throw new Error('Company not found');
+    }
+
+    const owners = await User.find({ 
+        companyId: company._id,
+        userType: 'company'
+    }).select('-password');
+
+    res.json(owners);
+});
+
+// Add company owner
+const addCompanyOwner = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+    const company = await Company.findById(req.params.id);
+    
+    if (!company) {
+        res.status(404);
+        throw new Error('Company not found');
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+        res.status(404);
+        throw new Error('User not found');
+    }
+
+    if (user.userType !== 'customer') {
+        res.status(400);
+        throw new Error('User is already an admin or company owner');
+    }
+
+    user.userType = 'company';
+    user.companyId = company._id;
+    await user.save();
+
+    res.json({ message: 'User added as company owner', user });
+});
+
+export { 
+    createCompany, 
+    getCompanies, 
+    getCompanyById, 
+    updateCompany, 
+    deleteCompany,
+    getCompanyOwners,
+    addCompanyOwner
+};
